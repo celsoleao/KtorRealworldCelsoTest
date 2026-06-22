@@ -36,6 +36,7 @@ fun Routing.profiles(profileController: ProfileController) {
                 post { profileController.follow(this.context) }
                 delete { profileController.unfollow(this.context) }
             }
+            get("stats") { profileController.stats(this.context) }
         }
     }
 }

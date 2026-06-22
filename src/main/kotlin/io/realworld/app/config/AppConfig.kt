@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.jackson.jackson
 import io.ktor.response.respond
 import io.ktor.routing.Routing
+import io.realworld.app.domain.exceptions.NotFoundException
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.ApplicationEngineFactory
@@ -80,11 +81,12 @@ fun Application.mainModule() {
         }
     }
     install(StatusPages) {
+        exception<NotFoundException> {
+            context.respond(HttpStatusCode.NotFound, ErrorResponse(mapOf("body" to listOf(it.message))))
+        }
         exception(Exception::class.java) {
             val errorResponse = ErrorResponse(mapOf("error" to listOf("detail", this.toString())))
-            context.respond(
-                HttpStatusCode.InternalServerError, errorResponse
-            )
+            context.respond(HttpStatusCode.InternalServerError, errorResponse)
         }
     }
 

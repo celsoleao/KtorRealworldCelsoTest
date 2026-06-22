@@ -2,12 +2,13 @@ package io.realworld.app.domain.repository
 
 import io.realworld.app.domain.User
 import io.realworld.app.domain.exceptions.NotFoundException
-import org.jetbrains.exposed.dao.LongIdTable
+import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
@@ -36,8 +37,9 @@ internal object Users : LongIdTable() {
 }
 
 internal object Follows : Table() {
-    val user: Column<Long> = long("user").primaryKey()
-    val follower: Column<Long> = long("user_follower").primaryKey()
+    val user: Column<Long> = long("user")
+    val follower: Column<Long> = long("user_follower")
+    override val primaryKey = PrimaryKey(user, follower)
 }
 
 class UserRepository {
@@ -99,14 +101,10 @@ class UserRepository {
 
     fun findIsFollowUser(email: String, userIdToFollow: Long): Boolean {
         return transaction {
-            Users.join(Follows, JoinType.INNER,
-                additionalConstraint = {
-                    Follows.user eq Users.id and (Follows.follower eq userIdToFollow)
-                })
-                .select {
-                    Users.email eq email
-                }
-                .count() > 0
+            Users.join(Follows, JoinType.INNER, onColumn = Users.id, otherColumn = Follows.user,
+                additionalConstraint = { Follows.follower eq userIdToFollow })
+                .select { Users.email eq email }
+                .count() > 0L
         }
     }
 
