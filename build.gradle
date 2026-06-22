@@ -17,7 +17,6 @@ buildscript {
     repositories {
         mavenLocal()
         mavenCentral()
-        jcenter()
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -26,12 +25,14 @@ buildscript {
 
 apply plugin: 'kotlin'
 apply plugin: 'application'
-mainClassName = "io.realworld.app.AppKt"
+
+application {
+    mainClass.set("io.realworld.app.AppKt")
+}
 
 repositories {
     mavenLocal()
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
