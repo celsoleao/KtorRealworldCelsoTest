@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pump Trader</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --fg:#e6edf3; --mut:#8b949e; --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  header h1 { font-size:16px; margin:0 12px 0 0; }
+  .badge { padding:2px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); color:var(--mut); }
+  .badge.warn { color:var(--warn); border-color:var(--warn); }
+  button { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
+  button.primary { background:#238636; border-color:#2ea043; }
+  main { display:grid; grid-template-columns: 1fr 300px; gap:16px; padding:16px; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } aside { order:-1; } }
+  .stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin-bottom:12px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .stat b { display:block; font-size:18px; }
+  .stat span { color:var(--mut); font-size:12px; }
+  .coin { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .coin.holding { border-color:var(--acc); }
+  .coin h3 { margin:0 0 6px; font-size:15px; display:flex; justify-content:space-between; gap:8px; }
+  .coin h3 small { color:var(--mut); font-weight:normal; }
+  .step { display:flex; gap:8px; font-size:13px; }
+  .step .i { width:16px; text-align:center; flex:none; }
+  .step .t { color:var(--mut); width:48px; flex:none; text-align:right; font-variant-numeric:tabular-nums; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .mut { color:var(--mut); }
+  aside section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+  aside h2 { font-size:13px; margin:0 0 8px; color:var(--mut); text-transform:uppercase; letter-spacing:.04em; }
+  label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:4px 0; font-size:13px; }
+  input[type=number] { width:80px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:3px 6px; }
+  .log { font-size:12px; color:var(--mut); max-height:200px; overflow:auto; }
+  .banner { background:#3d2e00; border:1px solid var(--warn); color:#f0d48a; padding:8px 12px; border-radius:8px; margin-bottom:12px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pump Trader</h1>
+  <span id="mode" class="badge warn"></span>
+  <span id="feed" class="badge"></span>
+  <span style="flex:1"></span>
+  <button id="start" class="primary">Start</button>
+  <button id="stop">Stop</button>
+  <button id="reset">Reset</button>
+</header>
+<main>
+  <div>
+    <div id="goal" class="banner" hidden></div>
+    <div class="stats" id="stats"></div>
+    <div id="coins"></div>
+  </div>
+  <aside>
+    <section>
+      <h2>Rules</h2>
+      <form id="cfg"></form>
+    </section>
+    <section>
+      <h2>Log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </aside>
+</main>
+<script>
+const FIELDS = [
+  ['maxDevPct', 'Skip if dev holds > %'],
+  ['maxBundlePct', 'Skip if bundled > %'],
+  ['observeMs', 'Observe before buy (ms)'],
+  ['buySol', 'Buy size (SOL)'],
+  ['maxOpenPositions', 'Max open positions'],
+  ['takeProfitPct', 'Take profit %'],
+  ['stopLossPct', 'Stop loss %'],
+  ['trailingStopPct', 'Trailing stop %'],
+  ['maxHoldMs', 'Max hold (ms)'],
+  ['goalMultiple', 'Stop at goal ×'],
+  ['startBalanceSol', 'Starting balance (SOL)'],
+  ['requireSocials', 'Require social links', 'checkbox'],
+];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const post = (p, body) => fetch(p, { method:'POST', body: body && JSON.stringify(body) });
+let formBuilt = false;
+
+$('start').onclick = () => post('/api/start');
+$('stop').onclick = () => post('/api/stop');
+$('reset').onclick = () => confirm('Reset balance and history?') && post('/api/reset');
+
+function buildForm(cfg) {
+  $('cfg').innerHTML = FIELDS.map(([k, label, type]) => type === 'checkbox'
+    ? `<label>${label}<input type="checkbox" name="${k}" ${cfg[k] ? 'checked' : ''}></label>`
+    : `<label>${label}<input type="number" step="any" name="${k}" value="${cfg[k]}"></label>`).join('');
+  $('cfg').onchange = (e) => post('/api/config', { [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  formBuilt = true;
+}
+
+const icon = (s) => s.ok === true ? '<span class="i ok">✓</span>' : s.ok === false ? '<span class="i bad">✕</span>' : '<span class="i mut">·</span>';
+const sol = (n) => `${n.toFixed(3)} SOL`;
+
+function render(s) {
+  $('mode').textContent = `${s.mode.toUpperCase()} TRADING`;
+  $('feed').textContent = s.feed === 'SimulatedFeed' ? 'SIMULATED DATA' : 'LIVE pump.fun data';
+  $('start').disabled = s.running; $('stop').disabled = !s.running;
+  if (!formBuilt) buildForm(s.cfg);
+
+  const pnl = s.equity - s.cfg.startBalanceSol;
+  const st = s.stats;
+  $('stats').innerHTML = [
+    [sol(s.equity), 'equity'],
+    [`<span class="${pnl >= 0 ? 'ok' : 'bad'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)}</span>`, 'P/L (SOL)'],
+    [`${st.wins}/${st.losses}`, 'wins / losses'],
+    [st.skipped, 'skipped'],
+    [`${st.skippedThenRugged}/${st.skipped}`, 'skipped → rugged'],
+    [st.boughtThenRugged, 'bought → rugged'],
+    [s.blacklisted, 'blacklisted devs'],
+  ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+
+  $('goal').hidden = !s.goalReached;
+  $('goal').innerHTML = `Goal ${s.cfg.goalMultiple}× reached. Not buying anymore. <button onclick="post('/api/resume')">Resume from here</button>`;
+
+  $('coins').innerHTML = s.coins.map((c) => {
+    const tag = c.position && !c.position.closed ? `<span class="${c.position.pnlPct >= 0 ? 'ok' : 'bad'}">holding ${c.position.pnlPct.toFixed(0)}%</span>`
+      : c.position ? `<span class="${c.position.pnlPct >= 0 ? 'ok' : 'bad'}">${c.position.pnlPct >= 0 ? '+' : ''}${c.position.pnlPct.toFixed(0)}%</span>`
+      : `<small>${c.status}${c.rugged ? ' · rugged' : ''}</small>`;
+    return `<div class="coin ${c.status}"><h3><span>$${esc(c.symbol)} <small>${esc(c.mint.slice(0, 6))}…</small></span>${tag}</h3>` +
+      c.steps.map((x) => `<div class="step">${icon(x)}<span class="t">${(x.t / 1000).toFixed(1)}s</span><span>${esc(x.text)}</span></div>`).join('') + '</div>';
+  }).join('') || '<p class="mut">Press Start. Coins show up here as they launch.</p>';
+
+  $('log').innerHTML = s.logs.map((l) => `<div>${new Date(l.at).toLocaleTimeString()} ${esc(l.msg)}</div>`).join('');
+}
+
+new EventSource('/events').onmessage = (e) => render(JSON.parse(e.data));
+</script>
+</body>
+</html>

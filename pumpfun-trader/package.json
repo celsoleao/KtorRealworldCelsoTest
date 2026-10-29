@@ -1,0 +1,13 @@
+{
+  "name": "pumpfun-trader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "pump.fun launch watcher with rug checks and paper trading",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.js",
+    "live": "FEED=live node server.js",
+    "test": "node --test test/*.test.js"
+  }
+}
